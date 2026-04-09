@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>シャトルバス表示</title>
+<title>シャトルバス案内</title>
 
 <style>
 body {
@@ -15,13 +15,22 @@ body {
 
 h1 { font-size: 6vw; }
 
-#time { font-size: 10vw; margin: 20px; }
-#next { font-size: 8vw; margin: 20px; }
+#time { font-size: 10vw; margin: 10px; }
+#next { font-size: 7vw; margin: 10px; }
 
 button {
   font-size: 5vw;
-  margin: 10px;
-  padding: 10px 20px;
+  margin: 5px;
+  padding: 10px 15px;
+}
+
+input {
+  font-size: 5vw;
+}
+
+.result-item {
+  padding: 5px;
+  border-bottom: 1px solid #0f0;
 }
 </style>
 </head>
@@ -38,13 +47,23 @@ button {
 <div id="time"></div>
 <div id="next"></div>
 
+<!-- 検索 -->
+<div style="margin-top:20px;">
+  <input type="time" id="searchTime">
+  <button onclick="searchBus()">検索</button>
+</div>
+
+<div id="result"></div>
+<div id="countdown"></div>
+
 <script>
 const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQUWfZ4fmfQIBpe1CM0d6ASi3qWoAB2RuZXWPNoKtxCdYlj9VFgcwB5-cobREUMeaQkzBGW4VGOUlk6/pub?gid=0&single=true&output=csv";
 
 let timetable = [];
 let currentMode = "go";
+let selectedBusTime = null;
 
-// CSV読み込み
+// ===== CSV読み込み =====
 async function loadCSV() {
   const res = await fetch(csvUrl);
   const text = await res.text();
@@ -57,12 +76,12 @@ async function loadCSV() {
   });
 }
 
-// モード切替
+// ===== モード切替 =====
 function setMode(mode) {
   currentMode = mode;
 }
 
-// 次のバス取得（完全版）
+// ===== 次のバス =====
 function getNextBus() {
   const now = new Date();
   const day = now.getDay();
@@ -83,10 +102,9 @@ function getNextBus() {
       stop: t.stop?.trim()
     }));
 
-  // 時刻順に並び替え（超重要）
   filtered.sort((a, b) => (a.time || "").localeCompare(b.time || ""));
 
-  // ===== ① 随時運行チェック =====
+  // 随時運行
   for (let t of filtered) {
     if (t.stop === "stop") continue;
 
@@ -103,7 +121,7 @@ function getNextBus() {
     }
   }
 
-  // ===== ② 通常便 =====
+  // 通常
   for (let t of filtered) {
     if (t.stop === "stop") continue;
 
@@ -120,14 +138,13 @@ function getNextBus() {
   return { type: "end" };
 }
 
-// 表示更新
+// ===== 表示更新 =====
 function updateDisplay() {
   const now = new Date();
   document.getElementById("time").textContent =
     now.toLocaleTimeString("ja-JP");
 
   const next = getNextBus();
-
   const el = document.getElementById("next");
 
   if (next.type === "normal") {
@@ -139,10 +156,91 @@ function updateDisplay() {
   }
 }
 
-// 初期化
+// ===== 検索 =====
+function searchBus() {
+  const input = document.getElementById("searchTime").value;
+  if (!input) return;
+
+  const [h, m] = input.split(":").map(Number);
+  const targetMin = h * 60 + m;
+
+  const now = new Date();
+  const day = now.getDay();
+
+  let dayType = "weekday";
+  if (day === 6) dayType = "saturday";
+  if (day === 0) dayType = "holiday";
+
+  const filtered = timetable
+    .filter(t => t.type === currentMode && t.day === dayType)
+    .map(t => ({
+      ...t,
+      time: t.time?.trim(),
+      stop: t.stop?.trim()
+    }));
+
+  filtered.sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+
+  let html = "";
+
+  for (let t of filtered) {
+    if (t.stop === "stop") continue;
+
+    if (t.mode === "normal" && t.time) {
+      const [hh, mm] = t.time.split(":").map(Number);
+      const busMin = hh * 60 + mm;
+
+      if (busMin >= targetMin) {
+        html += `<div class="result-item" onclick="selectBus('${t.time}')">${t.time}</div>`;
+      }
+    }
+
+    if (t.mode === "anytime") {
+      html += `<div>随時運行 (${t.start}〜${t.end})</div>`;
+    }
+  }
+
+  document.getElementById("result").innerHTML =
+    html || "該当なし";
+}
+
+// ===== 選択 =====
+function selectBus(time) {
+  selectedBusTime = time;
+}
+
+// ===== カウントダウン =====
+function updateCountdown() {
+  if (!selectedBusTime) return;
+
+  const now = new Date();
+  const [h, m] = selectedBusTime.split(":").map(Number);
+
+  const target = new Date();
+  target.setHours(h);
+  target.setMinutes(m);
+  target.setSeconds(0);
+
+  const diff = Math.floor((target - now) / 1000);
+
+  const el = document.getElementById("countdown");
+
+  if (diff <= 0) {
+    el.textContent = "発車しました";
+    return;
+  }
+
+  const min = Math.floor(diff / 60);
+  const sec = diff % 60;
+
+  el.textContent = `あと ${min}分 ${sec}秒`;
+}
+
+// ===== 初期化 =====
 async function init() {
   await loadCSV();
   setInterval(updateDisplay, 1000);
+  setInterval(updateCountdown, 1000);
 }
 
 init();
