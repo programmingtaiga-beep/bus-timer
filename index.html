@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>シャトルバス案内</title>
+<title>シャトルバス案内（CSV対応＋土曜運休考慮）</title>
 <style>
 body {
   background: black;
@@ -12,78 +12,23 @@ body {
   margin: 0;
   padding: 20px;
 }
-
-/* タイトル */
-h1 {
-  font-size: 36px;
-  margin-bottom: 20px;
-}
-
-/* 行き帰りボタン */
-button {
-  padding: 18px 30px;
-  margin: 8px;
-  font-size: 20px;
-  border-radius: 10px;
-  border: none;
-  cursor: pointer;
-}
-
-/* 入力欄 */
-input {
-  padding: 15px;
-  font-size: 22px;
-  width: 180px;
-  border-radius: 10px;
-  border: none;
-}
-
-/* 現在表示 */
-#directionText {
-  font-size: 24px;
-  margin: 15px 0;
-}
-
-/* 検索結果 */
-#results {
-  margin-top: 25px;
-  font-size: 24px;
-}
-
-/* 1行ごとの結果 */
-#results div {
-  margin: 12px 0;
-  padding: 12px;
-  background: #111;
-  border-radius: 12px;
-}
-
-/* スマホ最適化 */
+h1 { font-size: 36px; margin-bottom: 20px; }
+button { padding: 18px 30px; margin: 8px; font-size: 20px; border-radius: 10px; border: none; cursor: pointer; }
+input[type="time"], input[type="file"] { padding: 15px; font-size: 22px; border-radius: 10px; border: none; }
+#directionText { font-size: 24px; margin: 15px 0; }
+#results { margin-top: 25px; font-size: 24px; }
+#results div { margin: 12px 0; padding: 12px; background: #111; border-radius: 12px; }
 @media (max-width: 600px) {
-  h1 {
-    font-size: 30px;
-  }
-
-  button {
-    font-size: 22px;
-    padding: 20px 32px;
-  }
-
-  input {
-    font-size: 24px;
-    width: 200px;
-  }
-
-  #results {
-    font-size: 26px;
-  }
+  h1 { font-size: 30px; }
+  button { font-size: 22px; padding: 20px 32px; }
+  input[type="time"], input[type="file"] { font-size: 24px; width: 200px; }
+  #results { font-size: 26px; }
 }
 </style>
 </head>
-
 <body>
 
-<h1>シャトルバス案内</h1>
+<h1>シャトルバス案内（CSV対応＋土曜運休考慮）</h1>
 
 <button onclick="setDirection('go')">行き</button>
 <button onclick="setDirection('back')">帰り</button>
@@ -92,25 +37,18 @@ input {
 
 <input type="time" id="searchTime">
 <button onclick="search()">検索</button>
+<br><br>
+<input type="file" id="csvFile" accept=".csv" onchange="loadCSV(event)">
 
 <div id="results"></div>
 
 <script>
-// 時刻データ
-const timetable = {
-  go: ["08:00","08:30","09:00","09:30","10:00","10:30"],
-  back: ["19:30","20:15","20:45"]
-};
-
-// 随時運行の時間帯
-const anytime = {
-  go: { start: "08:00", end: "17:00" },
-  back: { start: "17:00", end: "21:00" }
-};
-
+let timetable = { go: [], back: [] };
+let anytime = { go: null, back: null };
 let currentDirection = "go";
+let currentDay = "weekday"; // 今はweekday固定。必要なら曜日選択UI追加可能
 
-// 行き帰り切り替え
+// 行き／帰り切り替え
 function setDirection(dir) {
   currentDirection = dir;
   document.getElementById("directionText").textContent =
@@ -130,42 +68,72 @@ function toTimeStr(min) {
   return `${h.toString().padStart(2,"0")}:${m.toString().padStart(2,"0")}`;
 }
 
-// 検索処理
+// CSV読み込み
+function loadCSV(event) {
+  const file = event.target.files[0];
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const text = e.target.result;
+    const lines = text.trim().split("\n");
+    timetable = { go: [], back: [] };
+    anytime = { go: null, back: null };
+
+    for (let i = 1; i < lines.length; i++) { // 1行目はヘッダー
+      const row = lines[i].split(/\t|,/);
+      const [type, day, mode, start, end, time, stop] = row;
+      if (!type) continue;
+
+      // 土曜運休の便は除外、平日は stop 無視
+      const isSaturdayStop = (currentDay === "saturday" && stop);
+      if (isSaturdayStop) continue;
+
+      if (mode === "normal") {
+        if (time) timetable[type].push(time.trim());
+      } else if (mode === "anytime") {
+        anytime[type] = { start: start.trim(), end: end.trim() };
+      }
+    }
+
+    // 時刻を昇順に
+    timetable.go.sort();
+    timetable.back.sort();
+    alert("CSV読み込み完了！");
+  };
+  reader.readAsText(file);
+}
+
+// 検索
 function search() {
   const input = document.getElementById("searchTime").value;
   const results = document.getElementById("results");
-
   if (!input) {
     results.innerHTML = "時間を入力してね";
     return;
   }
-
   const inputMin = toMinutes(input);
-  const list = timetable[currentDirection];
-
   let output = "";
 
-  // 通常ダイヤ
-  list.forEach(t => {
+  // 通常運行
+  timetable[currentDirection].forEach(t => {
     if (toMinutes(t) >= inputMin) {
       output += `<div>● ${currentDirection === "go" ? "行き" : "帰り"} ${t}</div>`;
     }
   });
 
-  // 随時運行判定
+  // 随時運行
   const range = anytime[currentDirection];
-  if (inputMin >= toMinutes(range.start) && inputMin <= toMinutes(range.end)) {
-    const remaining = toMinutes(range.end) - inputMin;
-    output += `<div style="color: yellow;">
+  if (range) {
+    const startMin = toMinutes(range.start);
+    const endMin = toMinutes(range.end);
+    if (inputMin >= startMin && inputMin <= endMin) {
+      const remaining = endMin - inputMin;
+      output += `<div style="color: yellow;">
 ● 随時運行（あと ${remaining} 分まで運行）
 </div>`;
+    }
   }
 
-  // 何もない場合
-  if (output === "") {
-    output = "該当なし";
-  }
-
+  if (output === "") output = "該当なし";
   results.innerHTML = output;
 }
 </script>
