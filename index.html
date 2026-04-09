@@ -169,6 +169,7 @@ function searchBus() {
   const targetMin = h * 60 + m;
 
   const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
   const day = now.getDay();
 
   let dayType = "weekday";
@@ -192,21 +193,31 @@ function searchBus() {
 
     const label = t.type === "go" ? "🟢行き" : "🔵帰り";
 
+    // 通常運行（未来のみ）
     if (t.mode === "normal" && t.time) {
       const [hh, mm] = t.time.split(":").map(Number);
       const busMin = hh * 60 + mm;
 
-      if (busMin >= targetMin) {
+      if (busMin >= targetMin && busMin >= nowMin) {
         html += `<div class="result-item" onclick="selectBus('${t.time}', '${t.type}')">
           ${label} ${t.time}
         </div>`;
       }
     }
 
-    if (t.mode === "anytime") {
-      html += `<div class="result-item">
-        ${label} 随時運行 (${t.start}〜${t.end})
-      </div>`;
+    // 随時運行（今の時間だけ）
+    if (t.mode === "anytime" && t.start && t.end) {
+      const [sh, sm] = t.start.split(":").map(Number);
+      const [eh, em] = t.end.split(":").map(Number);
+
+      const startMin = sh * 60 + sm;
+      const endMin = eh * 60 + em;
+
+      if (nowMin >= startMin && nowMin <= endMin) {
+        html += `<div class="result-item">
+          ${label} 随時運行 (${t.start}〜${t.end})
+        </div>`;
+      }
     }
   }
 
@@ -238,7 +249,8 @@ function updateCountdown() {
   const label = selectedBus.type === "go" ? "🟢行き" : "🔵帰り";
 
   if (diff <= 0) {
-    el.textContent = `${label} 発車しました`;
+    selectedBus = null;
+    el.textContent = "";
     return;
   }
 
