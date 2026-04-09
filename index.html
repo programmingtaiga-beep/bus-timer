@@ -48,7 +48,7 @@ let selectedBus = null;
 const goTimes = ["12:10", "13:00", "14:00"];
 const backTimes = ["19:30", "20:15", "20:45"];
 
-// 初期化（時間リスト）
+// 初期化
 function init() {
   const select = document.getElementById("timeSelect");
   for (let h = 8; h <= 21; h++) {
@@ -84,7 +84,7 @@ function isInTimeRange(start, end, target) {
   return target >= start && target <= end;
 }
 
-// 時計表示
+// 時計
 function updateClock() {
   const now = new Date();
   document.getElementById("clock").textContent =
@@ -100,7 +100,7 @@ function updateClock() {
 }
 setInterval(updateClock, 1000);
 
-// 🔍 検索（←ここが重要ロジック）
+// 🔍 検索（完全版）
 function search() {
   const selectedTime = document.getElementById("timeSelect").value;
   const selectedMin = toMinutes(selectedTime);
@@ -117,18 +117,23 @@ function search() {
     result.push("🔵 帰り 随時運行（16:00〜19:00）");
   }
 
-  // 定期便（検索時間ベース）
+  // 定期便（全部表示＋発車済み判定）
   const times = mode === "go" ? goTimes : backTimes;
 
   times.forEach(t => {
-    if (toMinutes(t) >= selectedMin) {
-      result.push((mode==="go"?"🟢 行き ":"🔵 帰り ") + t);
+    const tMin = toMinutes(t);
+    let label = (mode==="go"?"🟢 行き ":"🔵 帰り ") + t;
+
+    if (tMin < selectedMin) {
+      label += "（発車済み）";
     }
+
+    result.push(label);
   });
 
   document.getElementById("result").innerHTML = result.join("<br>");
 
-  // ⏱ カウントダウンは現在時刻ベース
+  // ⏱ カウントダウン（現在時刻ベース）
   const now = getNowMinutes();
   selectedBus = null;
 
