@@ -180,7 +180,8 @@ function searchBus() {
   if (day === 0) dayType = "holiday";
 
   const filtered = timetable
-    .filter(t => t.type === currentMode && t.day === dayType)
+    // 👇 行き・帰り両方対象にする
+    .filter(t => t.day === dayType)
     .map(t => ({
       ...t,
       time: t.time?.trim(),
@@ -194,24 +195,30 @@ function searchBus() {
   for (let t of filtered) {
     if (t.stop === "stop") continue;
 
+    // 👇 行き帰りラベル
+    const label = t.type === "go" ? "🟢行き" : "🔵帰り";
+
     if (t.mode === "normal" && t.time) {
       const [hh, mm] = t.time.split(":").map(Number);
       const busMin = hh * 60 + mm;
 
       if (busMin >= targetMin) {
-        html += `<div class="result-item" onclick="selectBus('${t.time}')">${t.time}</div>`;
+        html += `<div class="result-item" onclick="selectBus('${t.time}')">
+          ${label} ${t.time}
+        </div>`;
       }
     }
 
     if (t.mode === "anytime") {
-      html += `<div>随時運行 (${t.start}〜${t.end})</div>`;
+      html += `<div class="result-item">
+        ${label} 随時運行 (${t.start}〜${t.end})
+      </div>`;
     }
   }
 
   document.getElementById("result").innerHTML =
     html || "該当なし";
 }
-
 // ===== 選択 =====
 function selectBus(time) {
   selectedBusTime = time;
