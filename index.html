@@ -2,33 +2,26 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>シャトルバス案内（CSV対応＋土曜運休＋随時運行表示）</title>
+<title>シャトルバス案内（Web CSV参照版）</title>
 <style>
-body {
-  background: black;
-  color: #00ff88;
-  font-family: sans-serif;
-  text-align: center;
-  margin: 0;
-  padding: 20px;
-}
+body { background: black; color: #00ff88; font-family: sans-serif; text-align: center; margin: 0; padding: 20px; }
 h1 { font-size: 36px; margin-bottom: 20px; }
 button { padding: 18px 30px; margin: 8px; font-size: 20px; border-radius: 10px; border: none; cursor: pointer; }
-input[type="time"], input[type="file"] { padding: 15px; font-size: 22px; border-radius: 10px; border: none; }
+input[type="time"] { padding: 15px; font-size: 22px; border-radius: 10px; border: none; }
 #directionText { font-size: 24px; margin: 15px 0; }
 #results { margin-top: 25px; font-size: 24px; }
 #results div { margin: 12px 0; padding: 12px; background: #111; border-radius: 12px; }
 @media (max-width: 600px) {
   h1 { font-size: 30px; }
   button { font-size: 22px; padding: 20px 32px; }
-  input[type="time"], input[type="file"] { font-size: 24px; width: 200px; }
+  input[type="time"] { font-size: 24px; width: 200px; }
   #results { font-size: 26px; }
 }
 </style>
 </head>
 <body>
 
-<h1>シャトルバス案内（CSV対応＋土曜運休＋随時運行表示）</h1>
+<h1>シャトルバス案内（Web CSV参照版）</h1>
 
 <button onclick="setDirection('go')">行き</button>
 <button onclick="setDirection('back')">帰り</button>
@@ -37,12 +30,12 @@ input[type="time"], input[type="file"] { padding: 15px; font-size: 22px; border-
 
 <input type="time" id="searchTime">
 <button onclick="search()">検索</button>
-<br><br>
-<input type="file" id="csvFile" accept=".csv" onchange="loadCSV(event)">
 
 <div id="results"></div>
 
 <script>
+const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQUWfZ4fmfQIBpe1CM0d6ASi3qWoAB2RuZXWPNoKtxCdYlj9VFgcwB5-cobREUMeaQkzBGW4VGOUlk6/pub?output=csv";
+
 let timetable = { go: [], back: [] };
 let anytime = { go: null, back: null };
 let currentDirection = "go";
@@ -58,15 +51,14 @@ function setDirection(dir) {
 // 時刻を分に変換
 function toMinutes(time) {
   const [h, m] = time.split(":").map(Number);
-  return h * 60 + m;
+  return h*60 + m;
 }
 
-// CSV読み込み
-function loadCSV(event) {
-  const file = event.target.files[0];
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const text = e.target.result;
+// CSVをfetchで読み込む
+async function loadCSV() {
+  try {
+    const res = await fetch(CSV_URL);
+    const text = await res.text();
     const lines = text.trim().split("\n");
     timetable = { go: [], back: [] };
     anytime = { go: null, back: null };
@@ -87,12 +79,12 @@ function loadCSV(event) {
       }
     }
 
-    // 昇順にソート
     timetable.go.sort();
     timetable.back.sort();
-    alert("CSV読み込み完了！");
-  };
-  reader.readAsText(file);
+    console.log("CSV読み込み完了");
+  } catch(e) {
+    console.error("CSV読み込み失敗", e);
+  }
 }
 
 // 検索
@@ -109,11 +101,11 @@ function search() {
   // 通常運行
   timetable[currentDirection].forEach(t => {
     if (toMinutes(t) >= inputMin) {
-      output += `<div>● ${currentDirection === "go" ? "行き" : "帰り"} ${t}</div>`;
+      output += `<div>● ${currentDirection==="go"?"行き":"帰り"} ${t}</div>`;
     }
   });
 
-  // 随時運行（何時まで運行か表示）
+  // 随時運行
   const range = anytime[currentDirection];
   if (range) {
     const startMin = toMinutes(range.start);
@@ -125,9 +117,12 @@ function search() {
     }
   }
 
-  if (output === "") output = "該当なし";
+  if (!output) output = "該当なし";
   results.innerHTML = output;
 }
+
+// ページロード時にCSV読み込み
+window.onload = loadCSV;
 </script>
 
 </body>
