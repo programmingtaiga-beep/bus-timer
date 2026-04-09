@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>シャトルバス</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.json">
+
+<style>
+body {
+  margin: 0;
+  font-family: sans-serif;
+  text-align: center;
+  background: #111;
+  color: #fff;
+}
+
+h1 { font-size: 6vw; }
+
+button {
+  font-size: 4.5vw;
+  padding: 10px;
+  margin: 5px;
+  border-radius: 10px;
+  border: none;
+}
+
+.active {
+  background: orange;
+  color: black;
+}
+
+#nextBus {
+  font-size: 10vw;
+  margin: 20px 0;
+}
+
+#countdown {
+  font-size: 7vw;
+}
+
+.anytime {
+  color: yellow;
+  font-weight: bold;
+}
+
+.stop {
+  color: red;
+  font-weight: bold;
+}
+</style>
+</head>
+
+<body>
+
+<h1>シャトルバス案内</h1>
+
+<button id="goBtn" onclick="setMode('go')">行き</button>
+<button id="backBtn" onclick="setMode('back')">帰り</button>
+
+<div id="status"></div>
+<div id="nextBus"></div>
+<div id="countdown"></div>
+
+<script>
+let timetable = [];
+let currentMode = "go";
+
+const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQUWfZ4fmfQIBpe1CM0d6ASi3qWoAB2RuZXWPNoKtxCdYlj9VFgcwB5-cobREUMeaQkzBGW4VGOUlk6/pub?output=csv";
+
+// ===== 読み込み =====
+async function loadTimetable() {
+  const res = await fetch(SHEET_URL);
+  const text = await res.text();
+
+  const rows = text.split("\n").slice(1);
+  timetable = [];
+
+  rows.forEach(row => {
+    const [type, day, mode, start, end, time, stop] = row.split(",");
+    timetable.push({ type, day, mode, start, end, time, stop });
+  });
+}
+
+// ===== 曜日判定 =====
+function getDayType() {
+  const day = new Date().getDay();
+
+  if (day === 6) return "saturday";
+  if (day === 0) return "holiday";
+
+  return "weekday";
+}
+
+// ===== モード =====
+function setMode(mode) {
+  currentMode = mode;
+  goBtn.classList.remove("active");
+  backBtn.classList.remove("active");
+
+  if (mode === "go") goBtn.classList.add("active");
+  else backBtn.classList.add("active");
+}
+
+// ===== 次のバス =====
+function getNextBus() {
+  const dayType = getDayType();
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+  const filtered = timetable.filter(t =>
+    t.type === currentMode && t.day === dayType
+  );
+
+  for (let t of filtered) {
+
+    // 運休スキップ
+    if (t.stop === "stop") continue;
+
+    // 随時運行
+    if (t.mode === "anytime") {
+      const [sh, sm] = t.start.split(":").map(Number);
+      const [eh, em] = t.end.split(":").map(Number);
+
+      const startMin = sh * 60 + sm;
+      const endMin = eh * 60 + em;
+
+      if (currentMinutes >= startMin && currentMinutes <= endMin) {
+        return { type: "anytime", end: t.end };
+      }
+    }
+
+    // 通常
+    if (t.mode === "normal" && t.time) {
+      const [h, m] = t.time.split(":").map(Number);
+      const busMin = h * 60 + m;
+
+      if (busMin > currentMinutes) {
+        return { type: "normal", time: t.time };
+      }
+    }
+  }
+
+  return { type: "end" };
+}
+
+// ===== 表示 =====
+function updateTimer() {
+  const result = getNextBus();
+
+  const nextEl = document.getElementById("nextBus");
+  const countEl = document.getElementById("countdown");
+  const statusEl = document.getElementById("status");
+
+  const dayType = getDayType();
+  statusEl.textContent =
+    `${dayType === "weekday" ? "平日" : dayType === "saturday" ? "土曜" : "休日"} / ${currentMode === "go" ? "行き" : "帰り"}`;
+
+  if (result.type === "anytime") {
+    nextEl.innerHTML = `<span class="anytime">随時運行中</span>`;
+    countEl.textContent = `${result.end}まで運行`;
+    return;
+  }
+
+  if (result.type === "end") {
+    nextEl.textContent = "本日の運行終了";
+    countEl.textContent = "";
+    return;
+  }
+
+  nextEl.textContent = "次発: " + result.time;
+
+  const now = new Date();
+  const [h, m] = result.time.split(":").map(Number);
+  const nextTime = new Date();
+  nextTime.setHours(h, m, 0);
+
+  const diff = Math.floor((nextTime - now) / 1000);
+  const min = Math.floor(diff / 60);
+  const sec = diff % 60;
+
+  countEl.textContent = `あと ${min}分 ${sec}秒`;
+}
+
+// ===== 初期化 =====
+async function init() {
+  await loadTimetable();
+  setMode("go");
+
+  setInterval(updateTimer, 1000);
+  setInterval(loadTimetable, 60000);
+}
+
+init();
+</script>
+
+</body>
+</html>
