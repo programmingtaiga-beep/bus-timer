@@ -8,7 +8,8 @@ body { background: black; color: #00ff88; font-family: sans-serif; text-align: c
 h1 { font-size: 36px; margin-bottom: 20px; }
 button { padding: 18px 30px; margin: 8px; font-size: 20px; border-radius: 10px; border: none; cursor: pointer; }
 input[type="time"] { padding: 15px; font-size: 22px; border-radius: 10px; border: none; }
-#directionText, #nextBusTimer { font-size: 24px; margin: 15px 0; }
+#directionText { font-size: 24px; margin: 15px 0; }
+#nextBusTimer { font-size: 32px; color: #ffcc00; margin: 20px 0; font-weight: bold; }
 #results { margin-top: 25px; font-size: 24px; }
 #results div { margin: 12px 0; padding: 12px; background: #111; border-radius: 12px; }
 @media (max-width: 600px) {
@@ -16,6 +17,7 @@ input[type="time"] { padding: 15px; font-size: 22px; border-radius: 10px; border
   button { font-size: 22px; padding: 20px 32px; }
   input[type="time"] { font-size: 24px; width: 200px; }
   #results { font-size: 26px; }
+  #nextBusTimer { font-size: 28px; }
 }
 </style>
 </head>
@@ -27,6 +29,8 @@ input[type="time"] { padding: 15px; font-size: 22px; border-radius: 10px; border
 <button onclick="setDirection('back')">帰り</button>
 
 <p id="directionText">現在：行き</p>
+
+<!-- タイマー表示 -->
 <p id="nextBusTimer">次のバスまでの時間を計算中...</p>
 
 <input type="time" id="searchTime">
@@ -53,7 +57,7 @@ function toMinutes(time) {
   return h * 60 + m;
 }
 
-// CSVをfetchで自動読み込み
+// CSV読み込み
 async function loadCSV() {
   try {
     const res = await fetch(CSV_URL);
@@ -118,7 +122,7 @@ function search() {
   results.innerHTML = output;
 }
 
-// 次のバスまでのタイマー表示（曜日自動判定・土曜運休便スキップ）
+// タイマー更新（秒単位）
 function updateNextBusTimer() {
   const now = new Date();
   const dayNum = now.getDay();
@@ -143,7 +147,7 @@ function updateNextBusTimer() {
 
   // 通常便の中で次の便を探す
   for (const item of timetable[currentDirection]) {
-    if (isSaturday && item.stop) continue; // 土曜運休をスキップ
+    if (isSaturday && item.stop) continue;
     const tSec = toMinutes(item.time) * 60;
     if (tSec >= nowTotalSec) {
       nextTimeSec = tSec;
@@ -166,7 +170,7 @@ function updateNextBusTimer() {
 window.onload = () => {
   loadCSV().then(() => {
     updateNextBusTimer();
-    setInterval(updateNextBusTimer, 1000); // 秒単位で更新
+    setInterval(updateNextBusTimer, 1000);
   });
 };
 </script>
