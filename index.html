@@ -4,169 +4,111 @@
 <meta charset="UTF-8">
 <title>シャトルバス案内</title>
 <style>
-  body {
-    background: black;
-    color: #00ff66;
-    font-family: sans-serif;
-    text-align: center;
-  }
-  button {
-    font-size: 20px;
-    margin: 10px;
-    padding: 10px 20px;
-  }
-  select {
-    font-size: 18px;
-  }
-  .result {
-    margin-top: 20px;
-    font-size: 20px;
-  }
+body {
+  background: black;
+  color: #00ff88;
+  font-family: sans-serif;
+  text-align: center;
+}
+
+button {
+  padding: 10px 20px;
+  margin: 5px;
+}
+
+input {
+  padding: 10px;
+  font-size: 16px;
+  width: 120px;
+}
+
+#results {
+  margin-top: 20px;
+  font-size: 18px;
+}
 </style>
 </head>
+
 <body>
 
 <h1>シャトルバス案内</h1>
 
-<button onclick="setMode('go')">行き</button>
-<button onclick="setMode('back')">帰り</button>
+<button onclick="setDirection('go')">行き</button>
+<button onclick="setDirection('back')">帰り</button>
 
-<h2 id="clock"></h2>
-<h2 id="status"></h2>
+<p id="directionText">現在：行き</p>
 
-<select id="timeSelect"></select>
+<input type="time" id="searchTime">
 <button onclick="search()">検索</button>
 
-<div class="result" id="result"></div>
-<div class="result" id="countdown"></div>
+<div id="results"></div>
 
 <script>
-let mode = "go";
-let selectedBus = null;
+// 時刻データ（必要に応じて増やしてOK）
+const timetable = {
+  go: ["08:00","08:30","09:00","09:30","10:00","10:30"],
+  back: ["19:30","20:15","20:45"]
+};
 
-// 定期便
-const goTimes = ["12:10", "13:00", "14:00"];
-const backTimes = ["19:30", "20:15", "20:45"];
+// 随時運行の時間帯
+const anytime = {
+  go: { start: "08:00", end: "17:00" },
+  back: { start: "17:00", end: "21:00" }
+};
 
-// 初期化
-function init() {
-  const select = document.getElementById("timeSelect");
-  for (let h = 8; h <= 21; h++) {
-    for (let m = 0; m < 60; m += 5) {
-      const time = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
-      const option = document.createElement("option");
-      option.value = time;
-      option.textContent = time;
-      select.appendChild(option);
-    }
-  }
+let currentDirection = "go";
+
+// 行き帰り切り替え
+function setDirection(dir) {
+  currentDirection = dir;
+  document.getElementById("directionText").textContent =
+    "現在：" + (dir === "go" ? "行き" : "帰り");
 }
 
-// モード切替
-function setMode(m) {
-  mode = m;
+// 時刻を分に変換
+function toMinutes(time) {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
 }
 
-// 現在時刻（分）
-function getNowMinutes() {
-  const now = new Date();
-  return now.getHours()*60 + now.getMinutes();
-}
-
-// HH:MM → 分
-function toMinutes(t) {
-  const [h,m] = t.split(":").map(Number);
-  return h*60 + m;
-}
-
-// 範囲チェック
-function isInTimeRange(start, end, target) {
-  return target >= start && target <= end;
-}
-
-// 時計
-function updateClock() {
-  const now = new Date();
-  document.getElementById("clock").textContent =
-    now.toLocaleTimeString();
-
-  const min = getNowMinutes();
-
-  if (min > 21*60) {
-    document.getElementById("status").textContent = "本日の運行終了";
-  } else {
-    document.getElementById("status").textContent = "";
-  }
-}
-setInterval(updateClock, 1000);
-
-// 🔍 検索（完全版）
+// 検索処理
 function search() {
-  const selectedTime = document.getElementById("timeSelect").value;
-  const selectedMin = toMinutes(selectedTime);
+  const input = document.getElementById("searchTime").value;
+  const results = document.getElementById("results");
 
-  let result = [];
-
-  // 🟢 行き随時（検索時間で判定）
-  if (mode === "go" && isInTimeRange(8*60+20, 12*60, selectedMin)) {
-    result.push("🟢 行き 随時運行（8:20〜12:00）");
-  }
-
-  // 🔵 帰り随時（検索時間で判定）
-  if (mode === "back" && isInTimeRange(16*60, 19*60, selectedMin)) {
-    result.push("🔵 帰り 随時運行（16:00〜19:00）");
-  }
-
-  // 定期便（全部表示＋発車済み判定）
-  const times = mode === "go" ? goTimes : backTimes;
-
-  times.forEach(t => {
-    const tMin = toMinutes(t);
-    let label = (mode==="go"?"🟢 行き ":"🔵 帰り ") + t;
-
-    if (tMin < selectedMin) {
-      label += "（発車済み）";
-    }
-
-    result.push(label);
-  });
-
-  document.getElementById("result").innerHTML = result.join("<br>");
-
-  // ⏱ カウントダウン（現在時刻ベース）
-  const now = getNowMinutes();
-  selectedBus = null;
-
-  for (let t of times) {
-    if (toMinutes(t) >= now) {
-      selectedBus = t;
-      break;
-    }
-  }
-}
-
-// ⏱ カウントダウン更新
-function updateCountdown() {
-  if (!selectedBus) return;
-
-  const nowMin = getNowMinutes();
-  const busMin = toMinutes(selectedBus);
-
-  let diff = busMin - nowMin;
-
-  if (diff <= 0) {
-    selectedBus = null;
-    document.getElementById("countdown").textContent = "";
+  if (!input) {
+    results.innerHTML = "時間を入力してね";
     return;
   }
 
-  document.getElementById("countdown").textContent =
-    `次のバスまであと ${diff} 分`;
-}
-setInterval(updateCountdown, 1000);
+  const inputMin = toMinutes(input);
+  const list = timetable[currentDirection];
 
-// 実行
-init();
+  let output = "";
+
+  // 通常ダイヤ
+  list.forEach(t => {
+    if (toMinutes(t) >= inputMin) {
+      output += `<div>● ${currentDirection === "go" ? "行き" : "帰り"} ${t}</div>`;
+    }
+  });
+
+  // 随時運行判定
+  const range = anytime[currentDirection];
+  if (
+    inputMin >= toMinutes(range.start) &&
+    inputMin <= toMinutes(range.end)
+  ) {
+    output += `<div style="color: yellow;">● 随時運行あり</div>`;
+  }
+
+  // 何もない場合
+  if (output === "") {
+    output = "該当なし";
+  }
+
+  results.innerHTML = output;
+}
 </script>
 
 </body>
