@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>シャトルバス案内（CSV対応＋土曜運休考慮）</title>
+<title>シャトルバス案内（CSV対応＋土曜運休＋随時運行表示）</title>
 <style>
 body {
   background: black;
@@ -28,7 +28,7 @@ input[type="time"], input[type="file"] { padding: 15px; font-size: 22px; border-
 </head>
 <body>
 
-<h1>シャトルバス案内（CSV対応＋土曜運休考慮）</h1>
+<h1>シャトルバス案内（CSV対応＋土曜運休＋随時運行表示）</h1>
 
 <button onclick="setDirection('go')">行き</button>
 <button onclick="setDirection('back')">帰り</button>
@@ -46,7 +46,7 @@ input[type="time"], input[type="file"] { padding: 15px; font-size: 22px; border-
 let timetable = { go: [], back: [] };
 let anytime = { go: null, back: null };
 let currentDirection = "go";
-let currentDay = "weekday"; // 今はweekday固定。必要なら曜日選択UI追加可能
+let currentDay = "weekday"; // 必要なら曜日選択UI追加可能
 
 // 行き／帰り切り替え
 function setDirection(dir) {
@@ -61,13 +61,6 @@ function toMinutes(time) {
   return h * 60 + m;
 }
 
-// 分を時刻文字列に変換
-function toTimeStr(min) {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return `${h.toString().padStart(2,"0")}:${m.toString().padStart(2,"0")}`;
-}
-
 // CSV読み込み
 function loadCSV(event) {
   const file = event.target.files[0];
@@ -78,7 +71,7 @@ function loadCSV(event) {
     timetable = { go: [], back: [] };
     anytime = { go: null, back: null };
 
-    for (let i = 1; i < lines.length; i++) { // 1行目はヘッダー
+    for (let i = 1; i < lines.length; i++) {
       const row = lines[i].split(/\t|,/);
       const [type, day, mode, start, end, time, stop] = row;
       if (!type) continue;
@@ -94,7 +87,7 @@ function loadCSV(event) {
       }
     }
 
-    // 時刻を昇順に
+    // 昇順にソート
     timetable.go.sort();
     timetable.back.sort();
     alert("CSV読み込み完了！");
@@ -120,15 +113,14 @@ function search() {
     }
   });
 
-  // 随時運行
+  // 随時運行（何時まで運行か表示）
   const range = anytime[currentDirection];
   if (range) {
     const startMin = toMinutes(range.start);
     const endMin = toMinutes(range.end);
     if (inputMin >= startMin && inputMin <= endMin) {
-      const remaining = endMin - inputMin;
       output += `<div style="color: yellow;">
-● 随時運行（あと ${remaining} 分まで運行）
+● 随時運行（${range.start}〜${range.end}まで運行）
 </div>`;
     }
   }
