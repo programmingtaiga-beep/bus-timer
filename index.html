@@ -15,7 +15,7 @@
     margin: 10px;
     padding: 10px 20px;
   }
-  select, button {
+  select {
     font-size: 18px;
   }
   .result {
@@ -48,7 +48,7 @@ let selectedBus = null;
 const goTimes = ["12:10", "13:00", "14:00"];
 const backTimes = ["19:30", "20:15", "20:45"];
 
-// 初期化
+// 初期化（時間リスト）
 function init() {
   const select = document.getElementById("timeSelect");
   for (let h = 8; h <= 21; h++) {
@@ -62,6 +62,7 @@ function init() {
   }
 }
 
+// モード切替
 function setMode(m) {
   mode = m;
 }
@@ -79,15 +80,15 @@ function toMinutes(t) {
 }
 
 // 範囲チェック
-function isInTimeRange(start, end, now) {
-  return now >= start && now <= end;
+function isInTimeRange(start, end, target) {
+  return target >= start && target <= end;
 }
 
-// 時計
+// 時計表示
 function updateClock() {
   const now = new Date();
-  const time = now.toLocaleTimeString();
-  document.getElementById("clock").textContent = time;
+  document.getElementById("clock").textContent =
+    now.toLocaleTimeString();
 
   const min = getNowMinutes();
 
@@ -99,38 +100,38 @@ function updateClock() {
 }
 setInterval(updateClock, 1000);
 
-// 検索
+// 🔍 検索（←ここが重要ロジック）
 function search() {
   const selectedTime = document.getElementById("timeSelect").value;
   const selectedMin = toMinutes(selectedTime);
-  const now = getNowMinutes();
 
   let result = [];
 
-  // 🟢 行き随時
-  if (mode === "go" && isInTimeRange(8*60+20, 12*60, now)) {
+  // 🟢 行き随時（検索時間で判定）
+  if (mode === "go" && isInTimeRange(8*60+20, 12*60, selectedMin)) {
     result.push("🟢 行き 随時運行（8:20〜12:00）");
   }
 
-  // 🔵 帰り随時
-  if (mode === "back" && isInTimeRange(16*60, 19*60, now)) {
+  // 🔵 帰り随時（検索時間で判定）
+  if (mode === "back" && isInTimeRange(16*60, 19*60, selectedMin)) {
     result.push("🔵 帰り 随時運行（16:00〜19:00）");
   }
 
-  // 定期便
+  // 定期便（検索時間ベース）
   const times = mode === "go" ? goTimes : backTimes;
 
   times.forEach(t => {
-    const tMin = toMinutes(t);
-    if (tMin >= selectedMin) {
+    if (toMinutes(t) >= selectedMin) {
       result.push((mode==="go"?"🟢 行き ":"🔵 帰り ") + t);
     }
   });
 
   document.getElementById("result").innerHTML = result.join("<br>");
 
-  // カウント対象（次の便）
+  // ⏱ カウントダウンは現在時刻ベース
+  const now = getNowMinutes();
   selectedBus = null;
+
   for (let t of times) {
     if (toMinutes(t) >= now) {
       selectedBus = t;
@@ -139,11 +140,10 @@ function search() {
   }
 }
 
-// カウントダウン
+// ⏱ カウントダウン更新
 function updateCountdown() {
   if (!selectedBus) return;
 
-  const now = new Date();
   const nowMin = getNowMinutes();
   const busMin = toMinutes(selectedBus);
 
@@ -155,9 +155,8 @@ function updateCountdown() {
     return;
   }
 
-  const min = diff;
   document.getElementById("countdown").textContent =
-    `次のバスまであと ${min} 分`;
+    `次のバスまであと ${diff} 分`;
 }
 setInterval(updateCountdown, 1000);
 
