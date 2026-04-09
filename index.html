@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <title>シャトルバス案内</title>
-
 <style>
 body {
   background: black;
@@ -14,57 +13,69 @@ body {
   padding: 20px;
 }
 
+/* タイトル */
 h1 {
   font-size: 32px;
+  margin-bottom: 20px;
 }
 
-/* ボタン */
+/* 行き帰りボタン */
 button {
   padding: 15px 25px;
   margin: 8px;
-  font-size: 20px;
+  font-size: 18px;
   border-radius: 10px;
   border: none;
 }
 
-/* 時刻入力 */
+/* 入力欄 */
 input {
   padding: 15px;
-  font-size: 22px;
-  width: 180px;
+  font-size: 20px;
+  width: 160px;
   border-radius: 10px;
   border: none;
 }
 
-/* 結果 */
-#results {
-  margin-top: 30px;
-  font-size: 24px;
+/* 現在表示 */
+#directionText {
+  font-size: 22px;
+  margin: 15px 0;
 }
 
+/* 検索結果 */
+#results {
+  margin-top: 25px;
+  font-size: 22px;
+}
+
+/* 1行ごとの結果 */
 #results div {
   margin: 10px 0;
-  padding: 12px;
+  padding: 10px;
   background: #111;
   border-radius: 10px;
 }
 
-/* 状態表示 */
-.next {
-  color: yellow;
-  font-weight: bold;
-}
-
-.past {
-  color: gray;
-}
-
-/* スマホ対応 */
+/* スマホ最適化 */
 @media (max-width: 600px) {
-  h1 { font-size: 28px; }
-  button { font-size: 22px; padding: 18px 28px; }
-  input { font-size: 24px; }
-  #results { font-size: 26px; }
+  h1 {
+    font-size: 28px;
+  }
+
+  button {
+    font-size: 20px;
+    padding: 18px 28px;
+  }
+
+  input {
+    font-size: 22px;
+    width: 180px;
+  }
+
+  #results {
+    font-size: 24px;
+  }
 }
 </style>
 </head>
@@ -84,73 +95,72 @@ input {
 <div id="results"></div>
 
 <script>
+// 時刻データ（必要に応じて増やしてOK）
 const timetable = {
-  go: ["12:10","13:00","14:00"],
+  go: ["08:00","08:30","09:00","09:30","10:00","10:30"],
   back: ["19:30","20:15","20:45"]
 };
 
-// 随時運行
+// 随時運行の時間帯
 const anytime = {
-  go: { start: "08:20", end: "12:00" },
-  back: { start: "16:00", end: "19:00" }
+  go: { start: "08:00", end: "17:00" },
+  back: { start: "17:00", end: "21:00" }
 };
 
 let currentDirection = "go";
 
+// 行き帰り切り替え
 function setDirection(dir) {
   currentDirection = dir;
   document.getElementById("directionText").textContent =
     "現在：" + (dir === "go" ? "行き" : "帰り");
 }
 
-// 時刻→分
+// 時刻を分に変換
 function toMinutes(time) {
   const [h, m] = time.split(":").map(Number);
   return h * 60 + m;
 }
 
+// 検索処理
 function search() {
   const input = document.getElementById("searchTime").value;
-  if (!input) return;
+  const results = document.getElementById("results");
+
+  if (!input) {
+    results.innerHTML = "時間を入力してね";
+    return;
+  }
 
   const inputMin = toMinutes(input);
   const list = timetable[currentDirection];
-  const range = anytime[currentDirection];
 
   let output = "";
 
-  // 🟡 随時運行（検索時間ベース）
+  // 通常ダイヤ
+  list.forEach(t => {
+    if (toMinutes(t) >= inputMin) {
+      output += `<div>● ${currentDirection === "go" ? "行き" : "帰り"} ${t}</div>`;
+    }
+  });
+
+  // 随時運行判定
+  const range = anytime[currentDirection];
   if (
     inputMin >= toMinutes(range.start) &&
     inputMin <= toMinutes(range.end)
   ) {
-    output += `<div class="next">
-    ● 随時運行（${range.start}〜${range.end}）
-    </div>`;
+    output += `<div style="color: yellow;">
+● 随時運行（${range.start}〜${range.end}）
+</div>`;
   }
 
-  // 定期便
-  let nextFound = false;
-
-  list.forEach(t => {
-    const tMin = toMinutes(t);
-    let label = `● ${currentDirection==="go"?"行き":"帰り"} ${t}`;
-
-    if (tMin < inputMin) {
-      label = `<span class="past">${label}（発車済み）</span>`;
-    } else if (!nextFound) {
-      label = `<span class="next">${label}（次のバス）</span>`;
-      nextFound = true;
-    }
-
-    output += `<div>${label}</div>`;
-  });
-
+  // 何もない場合
   if (output === "") {
     output = "該当なし";
   }
 
-  document.getElementById("results").innerHTML = output;
+  results.innerHTML = output;
 }
 </script>
 
