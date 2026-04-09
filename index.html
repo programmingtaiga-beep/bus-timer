@@ -2,52 +2,26 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>シャトルバス</title>
-
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="manifest" href="manifest.json">
+<title>シャトルバス表示</title>
 
 <style>
 body {
-  margin: 0;
   font-family: sans-serif;
   text-align: center;
   background: #111;
-  color: #fff;
+  color: #0f0;
 }
 
 h1 { font-size: 6vw; }
 
+#time { font-size: 10vw; margin: 20px; }
+#next { font-size: 8vw; margin: 20px; }
+
 button {
-  font-size: 4.5vw;
-  padding: 10px;
-  margin: 5px;
-  border-radius: 10px;
-  border: none;
-}
-
-.active {
-  background: orange;
-  color: black;
-}
-
-#nextBus {
-  font-size: 10vw;
-  margin: 20px 0;
-}
-
-#countdown {
-  font-size: 7vw;
-}
-
-.anytime {
-  color: yellow;
-  font-weight: bold;
-}
-
-.stop {
-  color: red;
-  font-weight: bold;
+  font-size: 5vw;
+  margin: 10px;
+  padding: 10px 20px;
 }
 </style>
 </head>
@@ -56,70 +30,67 @@ button {
 
 <h1>シャトルバス案内</h1>
 
-<button id="goBtn" onclick="setMode('go')">行き</button>
-<button id="backBtn" onclick="setMode('back')">帰り</button>
+<div>
+  <button onclick="setMode('go')">行き</button>
+  <button onclick="setMode('back')">帰り</button>
+</div>
 
-<div id="status"></div>
-<div id="nextBus"></div>
-<div id="countdown"></div>
+<div id="time"></div>
+<div id="next"></div>
 
 <script>
+const csvUrl = "ここにCSVのURL";
+
 let timetable = [];
 let currentMode = "go";
 
-const SHEET_URL = "ここにCSVのURL";
-
-// ===== 読み込み =====
-async function loadTimetable() {
-  const res = await fetch(SHEET_URL);
+// CSV読み込み
+async function loadCSV() {
+  const res = await fetch(csvUrl);
   const text = await res.text();
 
-  const rows = text.split("\n").slice(1);
-  timetable = [];
+  timetable = text.split("\n").slice(1).map(row => {
+    const [type, day, mode, start, end, time, stop] =
+      row.split(",").map(v => v.trim());
 
-  rows.forEach(row => {
-    const [type, day, mode, start, end, time, stop] = row.split(",");
-    timetable.push({ type, day, mode, start, end, time, stop });
+    return { type, day, mode, start, end, time, stop };
   });
 }
 
-// ===== 曜日判定 =====
-function getDayType() {
-  const day = new Date().getDay();
-
-  if (day === 6) return "saturday";
-  if (day === 0) return "holiday";
-
-  return "weekday";
-}
-
-// ===== モード =====
+// モード切替
 function setMode(mode) {
   currentMode = mode;
-  goBtn.classList.remove("active");
-  backBtn.classList.remove("active");
-
-  if (mode === "go") goBtn.classList.add("active");
-  else backBtn.classList.add("active");
 }
 
-// ===== 次のバス =====
+// 次のバス取得（完全版）
 function getNextBus() {
-  const dayType = getDayType();
   const now = new Date();
+  const day = now.getDay();
+
+  let dayType = "weekday";
+  if (day === 6) dayType = "saturday";
+  if (day === 0) dayType = "holiday";
+
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-  const filtered = timetable.filter(t =>
-    t.type === currentMode && t.day === dayType
-  );
+  const filtered = timetable
+    .filter(t => t.type === currentMode && t.day === dayType)
+    .map(t => ({
+      ...t,
+      time: t.time?.trim(),
+      start: t.start?.trim(),
+      end: t.end?.trim(),
+      stop: t.stop?.trim()
+    }));
 
+  // 時刻順に並び替え（超重要）
+  filtered.sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+
+  // ===== ① 随時運行チェック =====
   for (let t of filtered) {
-
-    // 運休スキップ
     if (t.stop === "stop") continue;
 
-    // 随時運行
-    if (t.mode === "anytime") {
+    if (t.mode === "anytime" && t.start && t.end) {
       const [sh, sm] = t.start.split(":").map(Number);
       const [eh, em] = t.end.split(":").map(Number);
 
@@ -130,8 +101,12 @@ function getNextBus() {
         return { type: "anytime", end: t.end };
       }
     }
+  }
 
-    // 通常
+  // ===== ② 通常便 =====
+  for (let t of filtered) {
+    if (t.stop === "stop") continue;
+
     if (t.mode === "normal" && t.time) {
       const [h, m] = t.time.split(":").map(Number);
       const busMin = h * 60 + m;
@@ -145,51 +120,29 @@ function getNextBus() {
   return { type: "end" };
 }
 
-// ===== 表示 =====
-function updateTimer() {
-  const result = getNextBus();
-
-  const nextEl = document.getElementById("nextBus");
-  const countEl = document.getElementById("countdown");
-  const statusEl = document.getElementById("status");
-
-  const dayType = getDayType();
-  statusEl.textContent =
-    `${dayType === "weekday" ? "平日" : dayType === "saturday" ? "土曜" : "休日"} / ${currentMode === "go" ? "行き" : "帰り"}`;
-
-  if (result.type === "anytime") {
-    nextEl.innerHTML = `<span class="anytime">随時運行中</span>`;
-    countEl.textContent = `${result.end}まで運行`;
-    return;
-  }
-
-  if (result.type === "end") {
-    nextEl.textContent = "本日の運行終了";
-    countEl.textContent = "";
-    return;
-  }
-
-  nextEl.textContent = "次発: " + result.time;
-
+// 表示更新
+function updateDisplay() {
   const now = new Date();
-  const [h, m] = result.time.split(":").map(Number);
-  const nextTime = new Date();
-  nextTime.setHours(h, m, 0);
+  document.getElementById("time").textContent =
+    now.toLocaleTimeString("ja-JP");
 
-  const diff = Math.floor((nextTime - now) / 1000);
-  const min = Math.floor(diff / 60);
-  const sec = diff % 60;
+  const next = getNextBus();
 
-  countEl.textContent = `あと ${min}分 ${sec}秒`;
+  const el = document.getElementById("next");
+
+  if (next.type === "normal") {
+    el.textContent = `次のバス ${next.time}`;
+  } else if (next.type === "anytime") {
+    el.textContent = `随時運行中（〜${next.end}）`;
+  } else {
+    el.textContent = "本日の運行終了";
+  }
 }
 
-// ===== 初期化 =====
+// 初期化
 async function init() {
-  await loadTimetable();
-  setMode("go");
-
-  setInterval(updateTimer, 1000);
-  setInterval(loadTimetable, 60000);
+  await loadCSV();
+  setInterval(updateDisplay, 1000);
 }
 
 init();
