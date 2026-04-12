@@ -2,26 +2,75 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>シャトルバス案内（タイマー付き）</title>
+<title>シャトルバス案内</title>
+
 <style>
-body { background: black; color: #00ff88; font-family: sans-serif; text-align: center; margin: 0; padding: 20px; }
-h1 { font-size: 36px; margin-bottom: 20px; }
-button { padding: 18px 30px; margin: 8px; font-size: 20px; border-radius: 10px; border: none; cursor: pointer; }
-input[type="time"] { padding: 15px; font-size: 22px; border-radius: 10px; border: none; }
-#directionText { font-size: 24px; margin: 15px 0; }
-#nextBusTimer { font-size: 32px; color: #ffcc00; margin: 20px 0; font-weight: bold; }
-#results { margin-top: 25px; font-size: 24px; }
-#results div { margin: 12px 0; padding: 12px; background: #111; border-radius: 12px; }
-@media (max-width: 600px) {
-  h1 { font-size: 30px; }
-  button { font-size: 22px; padding: 20px 32px; }
-  input[type="time"] { font-size: 24px; width: 200px; }
-  #results { font-size: 26px; }
-  #nextBusTimer { font-size: 28px; }
+body {
+  background: black;
+  color: #00ff88;
+  font-family: sans-serif;
+  text-align: center;
+  margin: 0;
+  padding: 10px;
+}
+
+/* 上部固定バー */
+#topBar {
+  position: sticky;
+  top: 0;
+  background: black;
+  padding: 10px;
+  z-index: 1000;
+}
+
+/* 現在時刻 */
+#nowTime {
+  font-size: 18px;
+  color: #ccc;
+}
+
+/* タイマー */
+#nextBusTimer {
+  font-size: 30px;
+  color: #ffcc00;
+  font-weight: bold;
+  margin: 10px 0;
+}
+
+h1 { font-size: 28px; }
+
+button {
+  padding: 14px 20px;
+  margin: 5px;
+  font-size: 16px;
+  border-radius: 10px;
+  border: none;
+}
+
+input[type="time"] {
+  padding: 12px;
+  font-size: 18px;
+  border-radius: 10px;
+  border: none;
+}
+
+/* カードUI */
+#results div {
+  margin: 10px;
+  padding: 14px;
+  background: #111;
+  border-radius: 12px;
+  font-size: 20px;
 }
 </style>
 </head>
+
 <body>
+
+<div id="topBar">
+  <div id="nowTime"></div>
+  <div id="nextBusTimer">読み込み中...</div>
+</div>
 
 <h1>シャトルバス案内</h1>
 
@@ -29,9 +78,6 @@ input[type="time"] { padding: 15px; font-size: 22px; border-radius: 10px; border
 <button onclick="setDirection('back')">帰り</button>
 
 <p id="directionText">現在：行き</p>
-
-<!-- タイマー表示 -->
-<p id="nextBusTimer">次のバスまでの時間を計算中...</p>
 
 <input type="time" id="searchTime">
 <button onclick="search()">検索</button>
@@ -45,133 +91,142 @@ let timetable = { go: [], back: [] };
 let anytime = { go: null, back: null };
 let currentDirection = "go";
 
-function setDirection(dir) {
-  currentDirection = dir;
-  document.getElementById("directionText").textContent =
-    "現在：" + (dir === "go" ? "行き" : "帰り");
+// 祝日判定（簡易）
+function isHoliday(date) {
+  const holidays = ["01-01","02-11","04-29","05-03","05-04","05-05","11-03","11-23"];
+  const m = ("0"+(date.getMonth()+1)).slice(-2);
+  const d = ("0"+date.getDate()).slice(-2);
+  return holidays.includes(`${m}-${d}`);
 }
 
-// 時刻を分に変換
-function toMinutes(time) {
-  const [h, m] = time.split(":").map(Number);
-  return h * 60 + m;
+// 時刻変換
+function toMinutes(t){
+  const [h,m]=t.split(":").map(Number);
+  return h*60+m;
 }
 
 // CSV読み込み
-async function loadCSV() {
-  try {
-    const res = await fetch(CSV_URL);
-    const text = await res.text();
-    const lines = text.trim().split("\n");
-    timetable = { go: [], back: [] };
-    anytime = { go: null, back: null };
+async function loadCSV(){
+  const res = await fetch(CSV_URL);
+  const text = await res.text();
+  const lines = text.trim().split("\n");
 
-    for (let i = 1; i < lines.length; i++) {
-      const row = lines[i].split(/\t|,/);
-      const [type, day, mode, start, end, time, stop] = row;
-      if (!type) continue;
+  for(let i=1;i<lines.length;i++){
+    const row = lines[i].split(/\t|,/);
+    const [type,day,mode,start,end,time,stop]=row;
 
-      if (mode === "normal") {
-        if (time) timetable[type].push({ time: time.trim(), stop: stop ? true : false });
-      } else if (mode === "anytime") {
-        anytime[type] = { start: start.trim(), end: end.trim() };
-      }
+    if(mode==="normal" && time){
+      timetable[type].push({
+        time: time.trim(),
+        isSaturdayStop: (day==="saturday" && stop)
+      });
     }
-
-    timetable.go.sort((a,b)=> toMinutes(a.time)-toMinutes(b.time));
-    timetable.back.sort((a,b)=> toMinutes(a.time)-toMinutes(b.time));
-    console.log("CSV読み込み完了");
-  } catch(e) {
-    console.error("CSV読み込み失敗", e);
-  }
-}
-
-// 検索機能
-function search() {
-  const input = document.getElementById("searchTime").value;
-  const results = document.getElementById("results");
-  if (!input) { results.innerHTML = "時間を入力してね"; return; }
-
-  const inputMin = toMinutes(input);
-  const limitMin = inputMin + 120;
-  const now = new Date();
-  const isSaturday = (now.getDay() === 6);
-
-  let output = "";
-
-  // 随時運行
-  const range = anytime[currentDirection];
-  if (range) {
-    const startMin = toMinutes(range.start);
-    const endMin = toMinutes(range.end);
-    if (inputMin >= startMin && inputMin <= endMin) {
-      output += `<div style="color: yellow;">● 随時運行（${range.start}〜${range.end}まで運行）</div>`;
+    if(mode==="anytime"){
+      anytime[type]={start,end};
     }
   }
 
-  // 通常便
-  timetable[currentDirection].forEach(item => {
-    const tMin = toMinutes(item.time);
-    if (tMin >= inputMin && tMin <= limitMin) {
-      const warning = (isSaturday && item.stop) ? "（土曜運休）" : "";
-      output += `<div>● ${currentDirection === "go" ? "行き" : "帰り"} ${item.time} ${warning}</div>`;
-    }
-  });
-
-  if (output === "") output = "該当なし";
-  results.innerHTML = output;
+  timetable.go.sort((a,b)=>toMinutes(a.time)-toMinutes(b.time));
+  timetable.back.sort((a,b)=>toMinutes(a.time)-toMinutes(b.time));
 }
 
-// タイマー更新（秒単位）
-function updateNextBusTimer() {
-  const now = new Date();
-  const dayNum = now.getDay();
-  const isSaturday = (dayNum === 6);
+// 方向切替
+function setDirection(d){
+  currentDirection=d;
+  document.getElementById("directionText").textContent =
+    "現在：" + (d==="go"?"行き":"帰り");
+}
 
-  const nowMin = now.getHours() * 60 + now.getMinutes();
-  const nowSec = now.getSeconds();
-  const nowTotalSec = nowMin * 60 + nowSec;
+// 現在時刻表示
+function updateNowTime(){
+  const now=new Date();
+  const t=now.toLocaleTimeString();
+  document.getElementById("nowTime").textContent="現在時刻："+t;
+}
 
-  let nextTimeSec = null;
+// タイマー
+function updateTimer(){
+  const now=new Date();
+  const day=now.getDay();
+
+  // 日曜・祝日
+  if(day===0 || isHoliday(now)){
+    document.getElementById("nextBusTimer").textContent="本日運休";
+    return;
+  }
+
+  const isSaturday=(day===6);
+
+  const nowSec=now.getHours()*3600+now.getMinutes()*60+now.getSeconds();
 
   // 随時運行
-  const range = anytime[currentDirection];
-  if (range) {
-    const startSec = toMinutes(range.start) * 60;
-    const endSec = toMinutes(range.end) * 60;
-    if (nowTotalSec >= startSec && nowTotalSec <= endSec) {
-      document.getElementById("nextBusTimer").textContent = "随時運行中";
+  const range=anytime[currentDirection];
+  if(range){
+    const s=toMinutes(range.start)*60;
+    const e=toMinutes(range.end)*60;
+    if(nowSec>=s && nowSec<=e){
+      document.getElementById("nextBusTimer").textContent="随時運行中";
       return;
     }
   }
 
-  // 通常便の中で次の便を探す
-  for (const item of timetable[currentDirection]) {
-    if (isSaturday && item.stop) continue;
-    const tSec = toMinutes(item.time) * 60;
-    if (tSec >= nowTotalSec) {
-      nextTimeSec = tSec;
-      break;
+  // 次の便
+  for(const item of timetable[currentDirection]){
+    if(isSaturday && item.isSaturdayStop) continue;
+
+    const t=toMinutes(item.time)*60;
+    if(t>=nowSec){
+      const diff=t-nowSec;
+      const m=Math.floor(diff/60);
+      const s=diff%60;
+
+      document.getElementById("nextBusTimer").textContent =
+        `次のバス（${item.time}）まであと ${m}分${s}秒`;
+      return;
     }
   }
 
-  const timerDiv = document.getElementById("nextBusTimer");
-  if (nextTimeSec !== null) {
-    const diffSec = nextTimeSec - nowTotalSec;
-    const diffMin = Math.floor(diffSec / 60);
-    const diffS = diffSec % 60;
-    timerDiv.textContent = `次のバスまであと ${diffMin}分${diffS}秒`;
-  } else {
-    timerDiv.textContent = "本日の便は終了しました";
-  }
+  document.getElementById("nextBusTimer").textContent="本日の便は終了";
 }
 
-// ページロード時
-window.onload = () => {
-  loadCSV().then(() => {
-    updateNextBusTimer();
-    setInterval(updateNextBusTimer, 1000);
+// 検索
+function search(){
+  const input=document.getElementById("searchTime").value;
+  const results=document.getElementById("results");
+  if(!input){results.innerHTML="時間を入力";return;}
+
+  const inputMin=toMinutes(input);
+  const limit=inputMin+120;
+  const now=new Date();
+  const isSaturday=(now.getDay()===6);
+
+  let out="";
+
+  const range=anytime[currentDirection];
+  if(range){
+    if(inputMin>=toMinutes(range.start)&&inputMin<=toMinutes(range.end)){
+      out+=`<div style="color:yellow;">● 随時運行（${range.start}〜${range.end}）</div>`;
+    }
+  }
+
+  timetable[currentDirection].forEach(item=>{
+    const t=toMinutes(item.time);
+    if(t>=inputMin&&t<=limit){
+      const warn=(isSaturday&&item.isSaturdayStop)?"（土曜運休）":"";
+      out+=`<div>● ${item.time} ${warn}</div>`;
+    }
   });
+
+  results.innerHTML=out||"該当なし";
+}
+
+// 初期化
+window.onload=async()=>{
+  await loadCSV();
+  updateTimer();
+  updateNowTime();
+  setInterval(updateTimer,1000);
+  setInterval(updateNowTime,1000);
 };
 </script>
 
