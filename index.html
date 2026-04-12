@@ -5,62 +5,63 @@
 <title>シャトルバス案内</title>
 
 <style>
-body {
+  body {
   background: black;
   color: #00ff88;
   font-family: sans-serif;
   text-align: center;
   margin: 0;
-  padding: 10px;
+  padding: 5px;
 }
 
-/* 上部固定バー */
+/* 上部バー */
 #topBar {
   position: sticky;
   top: 0;
   background: black;
-  padding: 10px;
-  z-index: 1000;
+  padding: 5px 0 10px 0;
 }
 
 /* 現在時刻 */
 #nowTime {
-  font-size: 18px;
+  font-size: 22px;
   color: #ccc;
 }
 
-/* タイマー */
+/* タイマー（超重要） */
 #nextBusTimer {
-  font-size: 30px;
+  font-size: 40px;
   color: #ffcc00;
   font-weight: bold;
   margin: 10px 0;
 }
 
-h1 { font-size: 28px; }
+/* 運休表示（めちゃ強調） */
+.holiday {
+  font-size: 42px;
+  color: red;
+  font-weight: bold;
+  margin: 10px 0;
+}
 
+/* タイトル */
+h1 {
+  font-size: 24px;
+  margin: 10px 0;
+}
+
+/* ボタン */
 button {
-  padding: 14px 20px;
-  margin: 5px;
-  font-size: 16px;
-  border-radius: 10px;
-  border: none;
-}
-
-input[type="time"] {
-  padding: 12px;
+  padding: 16px 22px;
   font-size: 18px;
-  border-radius: 10px;
-  border: none;
+  border-radius: 12px;
 }
 
-/* カードUI */
-#results div {
-  margin: 10px;
+/* 入力 */
+input[type="time"] {
   padding: 14px;
-  background: #111;
-  border-radius: 12px;
   font-size: 20px;
+  width: 160px;
 }
 </style>
 </head>
