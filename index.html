@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>シャトルバス案内</title>
+<title>シャトルバス時刻案内</title>
 
 <style>
 body {
@@ -13,71 +13,82 @@ body {
   text-align: center;
 }
 
-/* ===== メイン表示（ちょい上） ===== */
+/* ===== メイン表示 ===== */
 #mainDisplay {
   position: fixed;
-  top: 35%;
+  top: 28%;
   left: 50%;
   transform: translate(-50%, -50%);
   width: 100%;
 }
 
+/* 現在時刻 */
 #nowTime {
-  font-size: 20px;
-  color: #aaa;
-  margin-bottom: 8px;
+  font-size: 26px;
+  color: #ccc;
 }
 
+/* 方向表示 */
+#directionDisplay {
+  font-size: 24px;
+  margin: 10px 0;
+  font-weight: bold;
+}
+
+.go { color: #00ff88; }
+.back { color: #00aaff; }
+
+/* タイマー */
 #nextBusTimer {
-  font-size: 48px;
+  font-size: 50px;
   font-weight: bold;
   color: #ffcc00;
   line-height: 1.4;
 }
 
-/* 運休表示 */
+/* 運休 */
 .holiday {
-  font-size: 56px;
+  font-size: 60px;
   color: red;
 }
 
-/* ===== 下UI ===== */
+/* ===== 操作 ===== */
 #controls {
   position: fixed;
-  bottom: 20px;
+  top: 60%;
+  left: 50%;
+  transform: translateX(-50%);
   width: 100%;
 }
 
-h1 {
-  font-size: 20px;
-  margin: 5px;
-}
-
 button {
-  padding: 14px 20px;
-  margin: 5px;
-  font-size: 16px;
-  border-radius: 10px;
+  padding: 18px 28px;
+  margin: 8px;
+  font-size: 20px;
+  border-radius: 14px;
   border: none;
 }
 
 input[type="time"] {
-  padding: 12px;
-  font-size: 18px;
-  border-radius: 10px;
+  padding: 16px;
+  font-size: 20px;
+  width: 180px;
+  border-radius: 12px;
   border: none;
 }
 
 #results {
+  margin-top: 15px;
   max-height: 180px;
   overflow-y: auto;
 }
 
 #results div {
-  margin: 6px 10px;
-  padding: 10px;
+  margin: 8px 15px;
+  padding: 14px;
   background: #111;
-  border-radius: 10px;
+  border-radius: 12px;
+  font-size: 20px;
 }
 </style>
 </head>
@@ -87,13 +98,12 @@ input[type="time"] {
 <!-- ===== メイン ===== -->
 <div id="mainDisplay">
   <div id="nowTime"></div>
+  <div id="directionDisplay" class="go">行き</div>
   <div id="nextBusTimer">読み込み中...</div>
 </div>
 
 <!-- ===== 操作 ===== -->
 <div id="controls">
-  <h1>シャトルバス</h1>
-
   <button onclick="setDirection('go')">行き</button>
   <button onclick="setDirection('back')">帰り</button>
 
@@ -112,7 +122,7 @@ let timetable = { go: [], back: [] };
 let anytime = { go: null, back: null };
 let currentDirection = "go";
 
-/* 祝日（簡易） */
+/* 祝日 */
 function isHoliday(date) {
   const holidays = ["01-01","02-11","04-29","05-03","05-04","05-05","11-03","11-23"];
   const m = ("0"+(date.getMonth()+1)).slice(-2);
@@ -120,13 +130,11 @@ function isHoliday(date) {
   return holidays.includes(`${m}-${d}`);
 }
 
-/* 時刻変換 */
 function toMinutes(t){
   const [h,m]=t.split(":").map(Number);
   return h*60+m;
 }
 
-/* CSV読み込み */
 async function loadCSV(){
   const res = await fetch(CSV_URL);
   const text = await res.text();
@@ -159,22 +167,32 @@ function updateNowTime(){
     "現在時刻 " + now.toLocaleTimeString();
 }
 
+/* 方向表示 */
+function updateDirectionDisplay(){
+  const el = document.getElementById("directionDisplay");
+  if(currentDirection==="go"){
+    el.textContent="行き";
+    el.className="go";
+  } else {
+    el.textContent="帰り";
+    el.className="back";
+  }
+}
+
 /* タイマー */
 function updateTimer(){
   const now=new Date();
   const day=now.getDay();
 
-  // 日曜・祝日
   if(day===0 || isHoliday(now)){
     document.getElementById("nextBusTimer").innerHTML =
-      '<div class="holiday">本日運休</div><div style="font-size:18px;color:#aaa;">日曜・祝日は運行していません</div>';
+      '<div class="holiday">本日運休</div>';
     return;
   }
 
   const isSaturday=(day===6);
   const nowSec=now.getHours()*3600+now.getMinutes()*60+now.getSeconds();
 
-  // 随時運行
   const range=anytime[currentDirection];
   if(range){
     const s=toMinutes(range.start)*60;
@@ -185,7 +203,6 @@ function updateTimer(){
     }
   }
 
-  // 次の便
   for(const item of timetable[currentDirection]){
     if(isSaturday && item.isSaturdayStop) continue;
 
@@ -204,12 +221,11 @@ function updateTimer(){
   document.getElementById("nextBusTimer").textContent="本日の便は終了";
 }
 
-/* 方向 */
 function setDirection(d){
   currentDirection=d;
+  updateDirectionDisplay();
 }
 
-/* 検索 */
 function search(){
   const input=document.getElementById("searchTime").value;
   const results=document.getElementById("results");
@@ -230,9 +246,9 @@ function search(){
   results.innerHTML=out||"該当なし";
 }
 
-/* 初期化 */
 window.onload=async()=>{
   await loadCSV();
+  updateDirectionDisplay();
   updateTimer();
   updateNowTime();
   setInterval(updateTimer,1000);
